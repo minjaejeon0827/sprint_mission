@@ -1,0 +1,46 @@
+# =====================================================================
+# 연구자 2 : 연구자 1의 Docker Hub 이미지 + Jupyter 이미지 오케스트레이션
+# =====================================================================
+# 실행:
+#   (선택) docker compose down # 마운트 설정 변경 시 진행    
+#   docker compose up --build
+#   1) trainer  : 연구자 1 이미지 실행 → model.pkl / test.csv 를 공유 볼륨에 기록 후 정상 종료
+#   2) jupyter  : trainer 가 성공 종료(service_completed_successfully)한 뒤 기동
+#                 공유 볼륨(shared-data)으로 두 파일 전달받아 inference.ipynb 파일 추론
+# =====================================================================
+
+services:
+
+  # ── 연구자 1 : 전처리·모델링·모델 저장 ──────────────────────────────
+  trainer:
+    # Docker Hub 이미지 (연구자 2는 이 이미지를 pull 만 하면 됨)
+    image: ${DOCKERHUB_USERNAME}/mission15-trainer:${IMAGE_TAG}
+    # build 블록도 함께 두어, 이미지가 없으면 로컬 빌드도 가능하게 함
+    build:
+      context: ./researcher1
+    container_name: mission15-trainer
+    volumes:
+      - shared-data:/app/output      # model.pkl / test.csv 파일 공유 볼륨에 출력
+    restart: "no"                    # 1회성 배치 작업 (학습 후 종료)
+
+  # ── 연구자 2 : 추론용 Jupyter Notebook ─────────────────────────────
+  jupyter:
+    build:
+      context: ./researcher2
+    image: mission15-jupyter:local
+    container_name: mission15-jupyter
+    ports:
+      - "8888:8888"                  # http://localhost:8888 접속
+    environment:
+      - JUPYTER_TOKEN=${JUPYTER_TOKEN}
+    volumes:
+      - shared-data:/home/jovyan/shared        # 연구자 1이 넘긴 파일 (읽기)
+      - ./researcher2/src/work:/home/jovyan/work    # ← src/work 폴더 경로 변경 및 노트북 + result.csv (호스트 보존)
+    depends_on:
+      trainer:
+        condition: service_completed_successfully   # trainer 완료 후 시작
+    restart: unless-stopped
+
+# ── 두 컨테이너가 공유하는 Named Volume ──────────────────────────────
+volumes:
+  shared-data:
