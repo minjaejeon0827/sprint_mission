@@ -10,7 +10,7 @@
 
 ---
 
-## 보고서
+# 보고서
 
 <a href="https://minjaejeon0827.github.io/sprint_mission15/reports/보고서.pdf">바로 가기</a>
 
